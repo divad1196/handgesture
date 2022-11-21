@@ -4,27 +4,38 @@ import { initPlayerVideo } from './video'
 import { makePrediction } from './prediction'
 import { RockGesture, PaperGesture, ScissorsGesture } from './gesture.js';
 
+async function checkSource(playerVideoElement, gestures, callback, options) {
+  const prediction = await makePrediction();
+  const videoPromise = initPlayerVideo(playerVideoElement);
+  const predictPromise = prediction.init(gestures);
+
+  console.log("Initialize game...");
+
+  return Promise.all([videoPromise, predictPromise])
+  .then(result => {
+      // result[0] will contain the initialized video element
+      playerVideo = result[0];
+      playerVideo.play();
+
+      console.log("Initialization finished");
+      prediction.runBackground(playerVideo, callback, options);
+
+  });
+}
+
+
 
 const knownGestures = [RockGesture, PaperGesture, ScissorsGesture];
-const prediction = await makePrediction();
 var playerVideo = document.querySelector('#player-video');
+var title = document.querySelector('#gesture');
+const options = {
+  requiredDuration: 20,  // ms
+  minimumScore: 7,        // up to 10?
+}
 
-
-const videoPromise = initPlayerVideo(playerVideo);
-const predictPromise = prediction.init(knownGestures);
-
-console.log("Initialize game...");
-
-Promise.all([videoPromise, predictPromise])
-.then(result => {
-
-    // result[0] will contain the initialized video element
-    playerVideo = result[0];
-    playerVideo.play();
-
-    console.log("Initialization finished");
-    prediction.runBackground(playerVideo, (gesture) => {
-      console.log("Received: " + gesture);
-    }, 50);
-
-});
+await checkSource(playerVideo, knownGestures, (gesture) => {
+  console.log("Received: " + gesture);
+  if(gesture != title.textContent) {
+    title.textContent = gesture;
+  }
+}, options);

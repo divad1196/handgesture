@@ -7,6 +7,17 @@ import { GestureEstimator } from 'fingerpose';
 // this import is just added in case you want to replace it with the WASM backend
 import '@tensorflow/tfjs-backend-webgl';
 
+function launch(f) {
+    const nonblocking = () => {
+        setTimeout(() => {
+            if(f()) {
+                nonblocking();
+            }
+        }, 0);
+    };
+    nonblocking();
+}
+
 async function makePrediction() {
     // store references
     let handposeModel, gestureEstimator;
@@ -61,19 +72,57 @@ async function makePrediction() {
         },
 
 
-        detectPlayerGesture: function(playerVideo, callback, requiredDuration) { // duration in ms
+        detectPlayerGesture: function(sourceElement, callback, options) { // duration in ms
+            options = Object.assign({
+                requiredDuration: 50,  // ms
+                minimumScore: 9,        // up to 10?
+            }, (options || {}));
+
 
             let lastGesture = "";
             let gestureDuration = 0;
 
-            const predictNonblocking = () => {
+
+            /*launch(async () => {
+                const predictionStartTS = Date.now();
+
+                // predict gesture (require high confidence)
+                const playerGesture = await this.predictGesture(sourceElement, options.minimumScore);
+                if(playerGesture == "") {
+                    lastGesture = "";
+                    gestureDuration = 0;
+                    return true;
+                }
+
+                if(playerGesture != lastGesture) {
+                    // detected a different gesture
+                    // -> reset timer
+                    lastGesture = playerGesture;
+                    gestureDuration = 0;
+                    return true;
+                }
+
+                // player keeps holding the same gesture
+                // -> keep timer running
+                const deltaTime = Date.now() - predictionStartTS;
+                gestureDuration += deltaTime;
+
+                if(gestureDuration < options.requiredDuration) {
+                    return true;
+                }
+
+                callback(playerGesture);
+
+            });*/
+
+            const nonblocking = () => {
 
                 setTimeout(() => {
 
                     const predictionStartTS = Date.now();
 
                     // predict gesture (require high confidence)
-                    this.predictGesture(playerVideo, 9).then(playerGesture => {
+                    this.predictGesture(sourceElement, options.minimumScore).then(playerGesture => {
 
                         if(playerGesture != "") {
 
@@ -95,16 +144,12 @@ async function makePrediction() {
                             gestureDuration = 0;
                         }
 
-                        if(gestureDuration < requiredDuration) {
-                            // update timer and repeat
-                            // UI.setTimerProgress(gestureDuration / requiredDuration);
-                            predictNonblocking();
+                        if(gestureDuration < options.requiredDuration) {
+                            nonblocking();
                         }
                         else {
-
                             // player result available
                             // -> stop timer and check winner
-                            // check the game result
                             callback(playerGesture);
                         }
                     });
@@ -112,15 +157,19 @@ async function makePrediction() {
                 }, 0);
             };
 
-            predictNonblocking();
+            nonblocking();
         },
-        runBackground: function(playerVideo, callback, requiredDuration) {
+        runBackground: function(playerVideo, callback, options) {
             const nonblocking = () => {
                 setTimeout(() => {
-                    this.detectPlayerGesture(playerVideo, (gesture) => {
-                        lastResult = gesture;
-                        callback(gesture);
-                    }, requiredDuration);
+                    this.detectPlayerGesture(
+                        playerVideo,
+                        (gesture) => {
+                            lastResult = gesture;
+                            callback(gesture);
+                        },
+                        options
+                    );
                     nonblocking();
                 }, 0);
             };
